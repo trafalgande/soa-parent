@@ -1,10 +1,10 @@
 package dto.music_band;
 
-import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
-@Builder
+@NoArgsConstructor
 public class CoordinatesDto {
     private Double x;
     private Double y;

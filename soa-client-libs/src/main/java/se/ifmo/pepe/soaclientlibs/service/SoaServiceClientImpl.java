@@ -1,53 +1,74 @@
 package se.ifmo.pepe.soaclientlibs.service;
 
 import dto.music_band.response.MusicBandView;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpMethod;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.glassfish.jersey.SslConfigurator;
 
-@Service
-@RequiredArgsConstructor
+import javax.enterprise.context.RequestScoped;
+import javax.net.ssl.HostnameVerifier;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchProviderException;
+import java.util.Objects;
+
+import static java.lang.String.format;
+
+@RequestScoped
 public class SoaServiceClientImpl implements SoaServiceClient {
-    private final RestTemplate restTemplate;
 
     @Override
     public MusicBandView addSingleToBand(long bandId, String title) {
-        String uri = UriComponentsBuilder
-                .fromHttpUrl(singlesUrl())
-                .buildAndExpand(bandId)
-                .toUriString();
-
-        return restTemplate.postForObject(uri, title, MusicBandView.class);
+        Invocation.Builder invocationBuilder = getSinglesWebTarget(bandId).request(MediaType.APPLICATION_JSON_TYPE);
+        Response response = invocationBuilder.post(Entity.entity(title,
+                MediaType.APPLICATION_JSON_TYPE));
+        return response.readEntity(MusicBandView.class);
     }
 
     @Override
     public MusicBandView removeParticipantFromBand(long bandId) {
-        return exchangeFor(bandId, participantsUrl(), MusicBandView.class, HttpMethod.DELETE);
+        Invocation.Builder invocationBuilder = getParticipantsWebTarget(bandId).request(MediaType.APPLICATION_JSON_TYPE);
+        Response response = invocationBuilder.delete();
+        return response.readEntity(MusicBandView.class);
     }
 
-    private <T> T exchangeFor(long id, String url, Class<T> responseType, HttpMethod method) {
-        String uri = UriComponentsBuilder
-                .fromHttpUrl(url)
-                .buildAndExpand(id)
-                .toUriString();
+    private Client client() {
+        SslConfigurator sslConfigurator = SslConfigurator.newInstance()
+                .keyStoreFile("/Users/aleksey.chaika/IdeaProjects/self/SOA/soa-parent/soa-common/src/main/resources/keystore/soa.p12")
+                .keyStorePassword("soasoa")
+                .trustStoreFile("/Users/aleksey.chaika/IdeaProjects/self/SOA/soa-parent/soa-common/src/main/resources/keystore/soa.p12")
+                .trustStorePassword("soasoa");
 
-        return restTemplate.exchange(uri,
-                method,
-                null,
-                responseType).getBody();
+        return ClientBuilder.newBuilder()
+                .sslContext(sslConfigurator.createSSLContext())
+                .hostnameVerifier((hostname, sslSession) -> hostname.equals("localhost"))
+                .build();
+    }
+
+    private WebTarget getSinglesWebTarget(long bandId) {
+        WebTarget webTarget = Objects.requireNonNull(client()).target(root());
+        return webTarget.path(format(singlesUrl(), bandId));
+    }
+
+    private WebTarget getParticipantsWebTarget(long bandId) {
+        WebTarget webTarget = Objects.requireNonNull(client()).target(root());
+        return webTarget.path(format(participantsUrl(), bandId));
     }
 
     private String root() {
-        return "http://localhost:8080/api";
+        return "https://localhost:8080/api";
     }
 
     private String singlesUrl() {
-        return root() + "/music-bands/{id}/singles";
+        return "/music-bands/%d/singles";
     }
 
     private String participantsUrl() {
-        return root() + "/music-bands/{id}/participants";
+        return "/music-bands/%d/participants";
     }
 }
